@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Roleta de Sorteio</title>
+<style>
+:root{--bg:#f6f5fb;--card:#fff;--text:#1d1b2e;--muted:#6b6880;--accent:#6d4aff;--line:#e2dff0;--field:#faf9ff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14131c;--card:#1e1c2b;--text:#f0eefb;--muted:#a09cb8;--accent:#8f74ff;--line:#34314a;--field:#171623;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#14131c;--card:#1e1c2b;--text:#f0eefb;--muted:#a09cb8;--accent:#8f74ff;--line:#34314a;--field:#171623;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+h1{font-size:1.5rem;text-align:center;margin:18px 12px 4px}
+.sub{text-align:center;color:var(--muted);margin:0 12px 14px;font-size:.92rem}
+main{display:grid;gap:16px;max-width:1000px;margin:0 auto;padding:0 12px 28px}
+@media(min-width:860px){main{grid-template-columns:1fr 1fr;align-items:start}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
+.live{min-height:1.7em;text-align:center;font-weight:700;font-size:1.15rem;margin-bottom:10px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.wheel{position:relative;width:min(88vw,460px);aspect-ratio:1;margin:0 auto}
+canvas{width:100%;height:100%;display:block}
+.ptr{position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:13px solid transparent;border-right:13px solid transparent;border-top:26px solid var(--text);z-index:2;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35))}
+.hub{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:23%;aspect-ratio:1;border-radius:50%;border:4px solid var(--card);background:var(--accent);color:#fff;font-weight:800;font-size:clamp(.8rem,3.4vw,1.05rem);cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+.hub:disabled{opacity:.65;cursor:default}
+.res{margin-top:16px;text-align:center;padding:12px;border-radius:14px;background:var(--field);border:1px solid var(--accent)}
+.res[hidden]{display:none}
+.res small{display:block;color:var(--muted)}
+.res strong{font-size:1.6rem;word-break:break-word}
+label.t{display:block;font-weight:700;margin-bottom:6px}
+textarea{width:100%;height:230px;resize:vertical;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--field);color:var(--text);font:15px/1.4 system-ui,sans-serif}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;align-items:center}
+button.b{padding:9px 13px;border-radius:10px;border:1px solid var(--line);background:var(--field);color:var(--text);font:600 .9rem system-ui,sans-serif;cursor:pointer}
+button.p{background:var(--accent);border-color:var(--accent);color:#fff}
+.cnt{margin-left:auto;color:var(--muted);font-size:.9rem}
+.chk{display:flex;gap:8px;align-items:center;font-size:.92rem}
+.tip{color:var(--muted);font-size:.85rem;margin:6px 0 0}
+h2{font-size:1rem;margin:16px 0 6px}
+ol{margin:0;padding-left:1.5rem;max-height:200px;overflow-y:auto;color:var(--text)}
+</style>
+</head>
+<body>
+<h1>🎡 Roleta de Sorteio</h1>
+<p class="sub">Cole centenas de itens de uma vez e gire.</p>
+<main>
+  <section class="card">
+    <div class="live" id="live">—</div>
+    <div class="wheel">
+      <div class="ptr"></div>
+      <canvas id="c"></canvas>
+      <button class="hub" id="spin">GIRAR</button>
+    </div>
+    <div class="res" id="res" hidden><small>Sorteado</small><strong id="rname"></strong></div>
+  </section>
+  <section class="card">
+    <label class="t" for="ta">Seus itens</label>
+    <textarea id="ta" placeholder="Cole aqui: um item por linha, ou separados por vírgula ou ponto e vírgula"></textarea>
+    <p class="tip">Dica: copie uma coluna do Excel ou Google Planilhas e cole direto. Cada linha vira uma fatia.</p>
+    <div class="row">
+      <button class="b p" id="paises">Carregar 195 países</button>
+      <button class="b" id="shuf">Embaralhar</button>
+      <button class="b" id="clr">Limpar tudo</button>
+      <span class="cnt" id="cnt">0 itens</span>
+    </div>
+    <label class="chk"><input type="checkbox" id="rm"> Remover o item sorteado da roleta</label>
+    <h2>Sorteados</h2>
+    <ol id="hist"></ol>
+  </section>
+</main>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var ta=$('ta'),cv=$('c'),ctx=cv.getContext('2d'),TAU=Math.PI*2;
+var items=[],rot=0,spinning=false,hist=[];
+var PAISES="Afeganistão;África do Sul;Albânia;Alemanha;Andorra;Angola;Antígua e Barbuda;Arábia Saudita;Argélia;Argentina;Armênia;Austrália;Áustria;Azerbaijão;Bahamas;Bangladesh;Barbados;Barein;Bélgica;Belize;Benin;Bielorrússia;Bolívia;Bósnia e Herzegovina;Botsuana;Brasil;Brunei;Bulgária;Burkina Faso;Burundi;Butão;Cabo Verde;Camarões;Camboja;Canadá;Catar;Cazaquistão;Chade;Chile;China;Chipre;Cingapura;Colômbia;Comores;Congo;Coreia do Norte;Coreia do Sul;Costa do Marfim;Costa Rica;Croácia;Cuba;Dinamarca;Djibuti;Dominica;Egito;El Salvador;Emirados Árabes Unidos;Equador;Eritreia;Eslováquia;Eslovênia;Espanha;Estados Unidos;Estônia;Eswatini;Etiópia;Fiji;Filipinas;Finlândia;França;Gabão;Gâmbia;Gana;Geórgia;Granada;Grécia;Guatemala;Guiana;Guiné;Guiné Equatorial;Guiné-Bissau;Haiti;Honduras;Hungria;Iêmen;Ilhas Marshall;Ilhas Salomão;Índia;Indonésia;Irã;Iraque;Irlanda;Islândia;Israel;Itália;Jamaica;Japão;Jordânia;Kiribati;Kuwait;Laos;Lesoto;Letônia;Líbano;Libéria;Líbia;Liechtenstein;Lituânia;Luxemburgo;Macedônia do Norte;Madagascar;Malásia;Malaui;Maldivas;Mali;Malta;Marrocos;Maurício;Mauritânia;México;Micronésia;Moçambique;Moldávia;Mônaco;Mongólia;Montenegro;Mianmar;Namíbia;Nauru;Nepal;Nicarágua;Níger;Nigéria;Noruega;Nova Zelândia;Omã;Países Baixos;Palau;Panamá;Papua-Nova Guiné;Paquistão;Paraguai;Peru;Polônia;Portugal;Quênia;Quirguistão;Reino Unido;República Centro-Africana;República Democrática do Congo;República Dominicana;República Tcheca;Romênia;Ruanda;Rússia;Samoa;San Marino;Santa Lúcia;São Cristóvão e Nevis;São Tomé e Príncipe;São Vicente e Granadinas;Seicheles;Senegal;Serra Leoa;Sérvia;Síria;Somália;Sri Lanka;Sudão;Sudão do Sul;Suécia;Suíça;Suriname;Tailândia;Tadjiquistão;Tanzânia;Timor-Leste;Togo;Tonga;Trinidad e Tobago;Tunísia;Turcomenistão;Turquia;Tuvalu;Ucrânia;Uganda;Uruguai;Uzbequistão;Vanuatu;Venezuela;Vietnã;Zâmbia;Zimbábue;Vaticano;Palestina".split(';').sort(function(a,b){return a.localeCompare(b,'pt-BR')});
+
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
+function save(){try{localStorage.setItem('roleta:itens',ta.value)}catch(e){}}
+function parse(){items=ta.value.split(/[\n\r\t,;]+/).map(function(s){return s.trim()}).filter(Boolean);$('cnt').textContent=items.length+(items.length===1?' item':' itens')}
+function idx(){var n=items.length,a=TAU/n;return Math.floor(((((-Math.PI/2-rot)%TAU)+TAU)%TAU)/a)%n}
+function draw(){
+  var dpr=window.devicePixelRatio||1,s=cv.clientWidth;if(!s)return;
+  cv.width=cv.height=Math.round(s*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,s,s);
+  var c=s/2,R=c-6,n=items.length;
+  if(!n){ctx.beginPath();ctx.arc(c,c,R,0,TAU);ctx.fillStyle=css('--line');ctx.fill();ctx.fillStyle=css('--muted');ctx.font='600 16px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('Adicione itens ao lado',c,c-40);return}
+  var a=TAU/n,i;
+  for(i=0;i<n;i++){var s0=rot+i*a;ctx.beginPath();ctx.moveTo(c,c);ctx.arc(c,c,R,s0,s0+a);ctx.closePath();ctx.fillStyle='hsl('+((i*137.508)%360)+' 68% 52%)';ctx.fill();if(n<=80){ctx.strokeStyle='rgba(255,255,255,.55)';ctx.lineWidth=1;ctx.stroke()}}
+  var fs=Math.min(18,a*R*0.55);
+  if(fs>=7){
+    ctx.font='600 '+fs+'px system-ui,sans-serif';ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillStyle='#fff';ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=3;
+    var maxW=R*0.6;
+    for(i=0;i<n;i++){
+      var t=items[i],cut=false;
+      while(t.length>2&&ctx.measureText(t).width>maxW){t=t.slice(0,-1);cut=true}
+      ctx.save();ctx.translate(c,c);ctx.rotate(rot+i*a+a/2);ctx.fillText(cut?t.trim()+'…':t,R-10,0);ctx.restore();
+    }
+    ctx.shadowBlur=0;
+  }
+}
+function render(){parse();draw();if(items.length)$('live').textContent=items[idx()];else $('live').textContent='—'}
+function renderHist(){var o=$('hist');o.innerHTML='';hist.forEach(function(h){var li=document.createElement('li');li.textContent=h;o.appendChild(li)});o.scrollTop=o.scrollHeight}
+function finish(i){
+  var name=items[i];$('rname').textContent=name;$('res').hidden=false;hist.push(name);renderHist();
+  $('live').textContent=name;
+  if($('rm').checked){items.splice(i,1);ta.value=items.join('\n');save();$('cnt').textContent=items.length+(items.length===1?' item':' itens');draw()}
+}
+function spin(){
+  if(spinning)return;parse();
+  if(!items.length){ta.focus();return}
+  if(items.length===1){finish(0);return}
+  spinning=true;$('spin').disabled=true;$('res').hidden=true;
+  var start=rot,total=TAU*(6+Math.random()*4)+Math.random()*TAU,dur=5500+Math.random()*1500,t0=null;
+  function f(t){
+    if(t0===null)t0=t;
+    var p=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-p,4);
+    rot=start+total*e;draw();$('live').textContent=items[idx()];
+    if(p<1)requestAnimationFrame(f);else{spinning=false;$('spin').disabled=false;finish(idx())}
+  }
+  requestAnimationFrame(f);
+}
+ta.addEventListener('input',function(){save();render()});
+$('spin').addEventListener('click',spin);
+$('paises').addEventListener('click',function(){if(spinning)return;ta.value=PAISES.join('\n');hist=[];renderHist();$('res').hidden=true;save();render()});
+$('shuf').addEventListener('click',function(){if(spinning)return;parse();for(var i=items.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),x=items[i];items[i]=items[j];items[j]=x}ta.value=items.join('\n');save();render()});
+$('clr').addEventListener('click',function(){if(spinning)return;ta.value='';hist=[];renderHist();$('res').hidden=true;save();render()});
+window.addEventListener('resize',draw);
+try{window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw)}catch(e){}
+try{var sv=localStorage.getItem('roleta:itens');if(sv)ta.value=sv}catch(e){}
+render();
+})();
+</script>
+</body>
+</html>
